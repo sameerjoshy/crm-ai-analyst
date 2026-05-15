@@ -180,6 +180,25 @@
     .send-btn:hover:not(:disabled) { background: var(--sf-blue-dk); }
     .send-btn:disabled { opacity: .45; cursor: not-allowed; }
 
+    /* ── Forecast widget ── */
+    .fc-body { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: start; }
+    @media(max-width:900px){ .fc-body { grid-template-columns: 1fr; } }
+    .fc-kpis { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; min-width: 300px; }
+    .fc-kpi { background: var(--sf-bg); border: 1px solid var(--sf-border); border-radius: 8px; padding: 13px 15px; }
+    .fc-kpi-main { border-color: var(--sf-blue); box-shadow: 0 0 0 2px rgba(1,118,211,.12); }
+    .fc-kpi-lbl { font-size: 10px; font-weight: 700; color: var(--sf-text3); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+    .fc-kpi-val { font-size: 20px; font-weight: 700; color: var(--sf-navy); }
+    .fc-kpi-sub { font-size: 11px; color: var(--sf-text3); margin-top: 3px; }
+    .fc-qtrs { display: flex; gap: 5px; flex-wrap: wrap; }
+    .fc-qbtn { padding: 3px 10px; border-radius: 14px; border: 1.5px solid var(--sf-border); background: #fff; color: var(--sf-text2); font-size: 11.5px; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .fc-qbtn:hover { border-color: var(--sf-blue); color: var(--sf-blue); }
+    .fc-qbtn.active { background: var(--sf-blue); border-color: var(--sf-blue); color: #fff; }
+    .fc-table table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .fc-table th { text-align: left; padding: 7px 12px; color: var(--sf-text3); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; border-bottom: 1px solid var(--sf-border); background: #FAFAF9; }
+    .fc-table td { padding: 9px 12px; border-bottom: 1px solid #F5F5F4; vertical-align: middle; }
+    .fc-table tfoot td { padding: 9px 12px; background: #FAFAF9; font-weight: 700; border-top: 2px solid var(--sf-border); border-bottom: none; }
+    .prob-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+
     /* ── Mode bar ── */
     .mode-bar { background: #fff; border: 1px solid var(--sf-border); border-radius: var(--r); padding: 10px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; box-shadow: var(--sf-shadow); }
     .mode-label { font-size: 11px; font-weight: 700; color: var(--sf-text3); text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
@@ -346,6 +365,17 @@
           <div class="wb" style="height:240px"><canvas id="chart-managers"></canvas></div>
         </div>
       </div>
+
+      <!-- Row 4: Revenue Forecast (full width) -->
+      <div class="wgrid">
+        <div class="widget w12" id="w-forecast">
+          <div class="wh">
+            <div class="wt"><span class="wdot" style="background:var(--sf-green)"></span>Revenue Forecast</div>
+            <div class="fc-qtrs" id="fc-qtrs"></div>
+          </div>
+          <div class="wb" id="wb-forecast"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -480,12 +510,15 @@ function buildEnriched(){
     const repName=gv(rep,['rep_name','name','full_name','first_name','firstname','sales_agent','agent'])
                 ||gv(d,  ['rep_name','owner_name','assigned_to','rep','owner','sales_agent','agent'])
                 ||rid||'Unknown Rep';
+    const listPrice=parseFloat((gv(prod,['sales_price','price','list_price','unit_price','selling_price'])||'').replace(/[$,]/g,''))||0;
     return{
       ...d,
       _name:dealName,
       _stage:gv(d,['stage','deal_stage','status','pipeline_stage'])||'Unknown',
       _value:val,
+      _forecastValue:val||listPrice,
       _close:gv(d,['close_date','closedate','expected_close','closing_date','target_close']),
+      _engage:gv(d,['engage_date','engagedate','start_date','created_date']),
       _repName:repName,
       _manager:gv(rep,['manager','manager_name','team_lead']),
       _region:gv(rep,['region','territory','zone','geo','regional_office','office'])
@@ -497,6 +530,91 @@ function buildEnriched(){
       _industry:gv(acct,['industry','vertical','sector']),
     };
   });
+}
+
+/* ── FORECAST ── */
+const STAGE_PROB={prospecting:0.20,qualifying:0.40,engaging:0.60,proposal:0.75,negotiation:0.85};
+function stageProb(s){
+  const sl=s.toLowerCase();
+  for(const[k,v]of Object.entries(STAGE_PROB))if(sl.includes(k))return v;
+  return 0.50;
+}
+function probColor(p){
+  if(p>=0.75)return'#EAFAF1';if(p>=0.50)return'#EFF6FF';if(p>=0.30)return'#FFF4EC';return'#FEF3F2';
+}
+function probTextColor(p){
+  if(p>=0.75)return'#2E844A';if(p>=0.50)return'#0176D3';if(p>=0.30)return'#CA6200';return'#BA0517';
+}
+function dealQuarterKey(d){
+  const ds=/won|lost|closed/i.test(d._stage)?(d._close||d._engage||''):(d._engage||d._close||'');
+  if(!ds)return null;
+  const dt=new Date(ds);if(isNaN(dt))return null;
+  return`${dt.getFullYear()}-Q${Math.ceil((dt.getMonth()+1)/3)}`;
+}
+function renderForecast(qKey){
+  const allQtrs=[...new Set(deals.map(dealQuarterKey).filter(Boolean))].sort();
+  // Quarter selector
+  const qBar=document.getElementById('fc-qtrs');
+  qBar.innerHTML=['all',...allQtrs].map(q=>
+    `<button class="fc-qbtn${q===qKey?' active':''}" onclick="renderForecast('${q}')">${q==='all'?'All Quarters':q}</button>`
+  ).join('');
+  // Filter
+  const filtered=qKey==='all'?deals:deals.filter(d=>dealQuarterKey(d)===qKey);
+  const won=filtered.filter(d=>/\bwon\b|closed[\s.-]?won/i.test(d._stage));
+  const open=filtered.filter(d=>!/won|lost|closed/i.test(d._stage));
+  const wonRev=won.reduce((s,d)=>s+d._forecastValue,0);
+  const openPipeline=open.reduce((s,d)=>s+d._forecastValue,0);
+  const weightedForecast=open.reduce((s,d)=>s+d._forecastValue*stageProb(d._stage),0);
+  const totalAchievable=wonRev+weightedForecast;
+  // Stage breakdown
+  const sbMap={};
+  open.forEach(d=>{
+    const s=d._stage,p=stageProb(s);
+    if(!sbMap[s])sbMap[s]={cnt:0,raw:0,wtd:0,prob:p};
+    sbMap[s].cnt++;sbMap[s].raw+=d._forecastValue;sbMap[s].wtd+=d._forecastValue*p;
+  });
+  const stageRows=Object.entries(sbMap).sort((a,b)=>b[1].raw-a[1].raw).map(([s,v])=>`
+    <tr>
+      <td><strong>${he(s)}</strong></td>
+      <td>${v.cnt}</td>
+      <td>${fmt(v.raw)}</td>
+      <td><span class="prob-badge" style="background:${probColor(v.prob)};color:${probTextColor(v.prob)}">${(v.prob*100).toFixed(0)}%</span></td>
+      <td><strong>${fmt(v.wtd)}</strong></td>
+    </tr>`).join('')||'<tr><td colspan="5" style="color:var(--sf-text3);text-align:center;padding:16px">No open deals for this period</td></tr>';
+  document.getElementById('wb-forecast').innerHTML=`
+    <div class="fc-body">
+      <div class="fc-kpis">
+        <div class="fc-kpi">
+          <div class="fc-kpi-lbl">Won Revenue</div>
+          <div class="fc-kpi-val" style="color:var(--sf-green)">${fmt(wonRev)}</div>
+          <div class="fc-kpi-sub">${won.length} deals closed</div>
+        </div>
+        <div class="fc-kpi fc-kpi-main">
+          <div class="fc-kpi-lbl">Weighted Forecast</div>
+          <div class="fc-kpi-val" style="color:var(--sf-blue)">${fmt(weightedForecast)}</div>
+          <div class="fc-kpi-sub">open pipeline × stage prob.</div>
+        </div>
+        <div class="fc-kpi">
+          <div class="fc-kpi-lbl">Total Achievable</div>
+          <div class="fc-kpi-val">${fmt(totalAchievable)}</div>
+          <div class="fc-kpi-sub">won + weighted forecast</div>
+        </div>
+        <div class="fc-kpi">
+          <div class="fc-kpi-lbl">Open Pipeline</div>
+          <div class="fc-kpi-val" style="color:var(--sf-orange)">${fmt(openPipeline)}</div>
+          <div class="fc-kpi-sub">${open.length} open deals at list price</div>
+        </div>
+      </div>
+      <div class="fc-table">
+        <table>
+          <thead><tr><th>Stage</th><th>Deals</th><th>Pipeline Value</th><th>Probability</th><th>Weighted Revenue</th></tr></thead>
+          <tbody>${stageRows}</tbody>
+          <tfoot><tr>
+            <td>Total Open</td><td>${open.length}</td><td>${fmt(openPipeline)}</td><td>—</td><td>${fmt(weightedForecast)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
 }
 
 /* ── BUILD DASHBOARD ── */
@@ -514,6 +632,7 @@ function buildDashboard(){
   renderRegional();
   renderSectorChart();
   renderManagerChart();
+  renderForecast('all');
 }
 function resetAll(){
   Object.keys(raw).forEach(k=>raw[k]=null);
@@ -559,16 +678,17 @@ function animPct(el,target,dur=1100){
 
 /* ── KPIs ── */
 function renderKPIs(){
-  const total=deals.reduce((s,d)=>s+d._value,0);
   const won=deals.filter(d=>/\bwon\b|closed[\s.-]?won/i.test(d._stage));
   const lost=deals.filter(d=>/\blost\b|closed[\s.-]?lost/i.test(d._stage));
   const open=deals.filter(d=>!/won|lost|closed/i.test(d._stage));
   const closed=won.length+lost.length;
   const wr=closed?won.length/closed*100:0;
   const avg=won.length?won.reduce((s,d)=>s+d._value,0)/won.length:0;
+  const openFcVal=open.reduce((s,d)=>s+d._forecastValue,0);
+  const wonRev=won.reduce((s,d)=>s+d._value,0);
   const kpis=[
-    {lbl:'Total Pipeline',val:total,sub:`${deals.length} total deals`,ico:'💰',pct:false},
-    {lbl:'Open Pipeline',val:open.reduce((s,d)=>s+d._value,0),sub:`${open.length} open deals`,ico:'📂',pct:false},
+    {lbl:'Total Pipeline',val:wonRev+openFcVal,sub:`won + ${open.length} open deals`,ico:'💰',pct:false},
+    {lbl:'Open Pipeline',val:openFcVal,sub:`${open.length} open deals (list price)`,ico:'📂',pct:false},
     {lbl:'Win Rate',val:wr,sub:`${won.length} won / ${closed} closed`,ico:'🎯',pct:true},
     {lbl:'Avg Deal Size (Won)',val:avg,sub:`based on ${won.length} won deals`,ico:'📊',pct:false},
     {lbl:'Closed Won Rev.',val:won.reduce((s,d)=>s+d._value,0),sub:`${won.length} deals won`,ico:'✅',pct:false},
