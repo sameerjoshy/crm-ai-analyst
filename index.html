@@ -487,44 +487,60 @@ function buildEnriched() {
   if (!raw.pipeline) return [];
 
   const acctMap = {}, repMap = {}, prodMap = {};
+
+  // accounts — join key is account name or account_id
   if (raw.accounts) raw.accounts.data.forEach(r => {
-    const id = gv(r, ['account_id','accountid','id','account']);
+    const id = gv(r, ['account_id','accountid','id','account','account_name','company']);
     if (id) acctMap[id] = r;
   });
+
+  // teams — join key is sales_agent name or rep_id
   if (raw.teams) raw.teams.data.forEach(r => {
-    const id = gv(r, ['rep_id','repid','user_id','userid','id','owner_id','ownerid']);
+    const id = gv(r, ['rep_id','repid','user_id','userid','id','owner_id','ownerid','sales_agent','agent','rep_name','name']);
     if (id) repMap[id] = r;
   });
+
+  // products — join key is product name or product_id
   if (raw.products) raw.products.data.forEach(r => {
-    const id = gv(r, ['product_id','productid','id']);
+    const id = gv(r, ['product_id','productid','id','product','product_name','name']);
     if (id) prodMap[id] = r;
   });
 
   return raw.pipeline.data.map(d => {
-    const aid  = gv(d, ['account_id','accountid','account']);
-    const rid  = gv(d, ['rep_id','repid','owner_id','ownerid','user_id','assigned_to']);
-    const pid  = gv(d, ['product_id','productid','product']);
+    const aid  = gv(d, ['account_id','accountid','account','account_name','company']);
+    const rid  = gv(d, ['rep_id','repid','owner_id','ownerid','user_id','assigned_to','sales_agent','agent','rep_name','owner']);
+    const pid  = gv(d, ['product_id','productid','product','product_name']);
     const acct = acctMap[aid] || {};
     const rep  = repMap[rid]  || {};
     const prod = prodMap[pid] || {};
-    const vRaw = gv(d, ['value','amount','deal_value','dealvalue','revenue','arr','mrr','contract_value','deal_amount']);
+
+    const vRaw = gv(d, ['value','amount','deal_value','dealvalue','revenue','arr','mrr',
+                        'contract_value','deal_amount','close_value','selling_price','price']);
     const val  = parseFloat((vRaw || '').replace(/[$,]/g, '')) || 0;
+
+    // Best-effort deal name: named field → account+product combo → opportunity id
+    const dealName = gv(d, ['deal_name','dealname','name','opportunity_name','title','deal'])
+      || (aid && pid ? `${aid} – ${pid}` : null)
+      || gv(d, ['opportunity_id','id']) || 'Untitled';
+
+    // Rep name: from joined teams row first, then directly from pipeline column
+    const repName = gv(rep, ['rep_name','name','full_name','first_name','firstname','sales_agent','agent'])
+                 || gv(d,   ['rep_name','owner_name','assigned_to','rep','owner','sales_agent','agent'])
+                 || rid || 'Unknown Rep';
 
     return {
       ...d,
-      _name:  gv(d, ['deal_name','dealname','name','opportunity_name','title','deal']) || 'Untitled',
-      _stage: gv(d, ['stage','deal_stage','status','pipeline_stage']) || 'Unknown',
-      _value: val,
-      _prob:  parseFloat(gv(d, ['probability','prob','win_prob','close_prob'])) || null,
-      _close: gv(d, ['close_date','closedate','expected_close','closing_date','target_close']),
-      _repName: gv(rep, ['rep_name','name','full_name','first_name','firstname'])
-              || gv(d,   ['rep_name','owner_name','assigned_to','rep','owner'])
-              || rid || 'Unknown Rep',
-      _team:   gv(rep, ['team','team_name','group']),
-      _region: gv(rep,  ['region','territory','zone','geo'])
-             || gv(acct, ['region','territory','zone','geo'])
-             || gv(d,    ['region','territory']),
-      _company: gv(acct, ['company','company_name','account_name','name'])
+      _name:    dealName,
+      _stage:   gv(d, ['stage','deal_stage','status','pipeline_stage']) || 'Unknown',
+      _value:   val,
+      _prob:    parseFloat(gv(d, ['probability','prob','win_prob','close_prob'])) || null,
+      _close:   gv(d, ['close_date','closedate','expected_close','closing_date','target_close']),
+      _repName: repName,
+      _team:    gv(rep, ['team','team_name','group','manager']),
+      _region:  gv(rep,  ['region','territory','zone','geo','regional_office','office'])
+              || gv(acct, ['region','territory','zone','geo','office_location'])
+              || gv(d,    ['region','territory']),
+      _company: gv(acct, ['company','company_name','account_name','name','account'])
               || gv(d,   ['account_name','company','account']),
       _product: gv(prod, ['product_name','name','product'])
               || gv(d,   ['product','product_name']),
