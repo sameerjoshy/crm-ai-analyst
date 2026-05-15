@@ -252,7 +252,7 @@
       <div class="wgrid">
         <div class="widget w5" id="w-stages">
           <div class="wh"><div class="wt"><span class="wdot" style="background:var(--sf-blue)"></span>Pipeline by Stage</div></div>
-          <div class="wb"><canvas id="chart-stages" height="195"></canvas></div>
+          <div class="wb" style="height:230px"><canvas id="chart-stages"></canvas></div>
         </div>
         <div class="widget w3" id="w-winloss">
           <div class="wh"><div class="wt"><span class="wdot" style="background:var(--sf-green)"></span>Win / Loss</div></div>
@@ -260,7 +260,7 @@
         </div>
         <div class="widget w4" id="w-trend">
           <div class="wh"><div class="wt"><span class="wdot" style="background:var(--sf-purple)"></span>Monthly Close Trend</div></div>
-          <div class="wb"><canvas id="chart-trend" height="195"></canvas></div>
+          <div class="wb" style="height:230px"><canvas id="chart-trend"></canvas></div>
         </div>
       </div>
 
@@ -294,7 +294,7 @@
         </div>
         <div class="widget w4" id="w-products">
           <div class="wh"><div class="wt"><span class="wdot" style="background:var(--sf-red)"></span>Product Mix</div></div>
-          <div class="wb"><canvas id="chart-products" height="200"></canvas></div>
+          <div class="wb" style="height:240px"><canvas id="chart-products"></canvas></div>
         </div>
       </div>
 
@@ -306,11 +306,11 @@
         </div>
         <div class="widget w4" id="w-sector">
           <div class="wh"><div class="wt"><span class="wdot" style="background:var(--sf-purple)"></span>Sector Breakdown</div></div>
-          <div class="wb"><canvas id="chart-sector" height="200"></canvas></div>
+          <div class="wb" style="height:240px"><canvas id="chart-sector"></canvas></div>
         </div>
         <div class="widget w4" id="w-managers">
           <div class="wh"><div class="wt"><span class="wdot" style="background:var(--sf-teal)"></span>Manager / Team</div></div>
-          <div class="wb"><canvas id="chart-managers" height="200"></canvas></div>
+          <div class="wb" style="height:240px"><canvas id="chart-managers"></canvas></div>
         </div>
       </div>
     </div>
@@ -345,6 +345,15 @@
 
 </main>
 <script>
+/* ── CHART.JS GLOBAL DEFAULTS (light theme) ── */
+Chart.defaults.color = '#706E6B';
+Chart.defaults.borderColor = '#EBEBEA';
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+Chart.defaults.font.size = 11;
+
+/* ── HTML ESCAPE HELPER ── */
+const he = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
 /* ── STATE ── */
 const raw = { accounts:null, pipeline:null, products:null, teams:null, dictionary:null };
 let deals=[], charts={}, history=[];
@@ -506,8 +515,8 @@ function animPct(el,target,dur=1100){
 /* ── KPIs ── */
 function renderKPIs(){
   const total=deals.reduce((s,d)=>s+d._value,0);
-  const won=deals.filter(d=>/won|closed.won/i.test(d._stage));
-  const lost=deals.filter(d=>/lost|closed.lost/i.test(d._stage));
+  const won=deals.filter(d=>/\bwon\b|closed[\s.-]?won/i.test(d._stage));
+  const lost=deals.filter(d=>/\blost\b|closed[\s.-]?lost/i.test(d._stage));
   const open=deals.filter(d=>!/won|lost|closed/i.test(d._stage));
   const closed=won.length+lost.length;
   const wr=closed?won.length/closed*100:0;
@@ -543,9 +552,9 @@ function renderStageChart(){
   charts.stages=new Chart(document.getElementById('chart-stages'),{
     type:'bar',
     data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1].val),backgroundColor:COLORS.slice(0,sorted.length),borderRadius:5,borderSkipped:false}]},
-    options:{responsive:true,animation:{duration:900,easing:'easeOutQuart'},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:900,easing:'easeOutQuart'},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmt(c.raw)}  (${sMap[c.label].cnt} deals)`}}},
-      scales:{y:{ticks:{callback:v=>fmt(v),font:{size:11}},grid:{color:'#F3F3F3'}},x:{ticks:{font:{size:11}},grid:{display:false}}}}
+      scales:{y:{ticks:{callback:v=>fmt(v),font:{size:11}},grid:{color:'#EBEBEA'}},x:{ticks:{font:{size:11}},grid:{display:false}}}}
   });
 }
 
@@ -559,8 +568,9 @@ function renderWinLoss(){
   const openV=open.reduce((s,d)=>s+d._value,0);
   const closed=won.length+lost.length;
   const wr=closed?(won.length/closed*100).toFixed(0)+'%':'N/A';
-  const cvs=document.createElement('canvas');cvs.width=130;cvs.height=130;
+  if(charts.winloss){charts.winloss.destroy();charts.winloss=null;}
   const wrap=document.getElementById('wb-winloss');wrap.innerHTML='';
+  const cvs=document.createElement('canvas');cvs.width=130;cvs.height=130;
   const row=document.createElement('div');row.className='donut-row';
   const dw=document.createElement('div');dw.className='donut-wrap';dw.style.width='130px';
   const center=document.createElement('div');center.className='donut-center';
@@ -572,7 +582,6 @@ function renderWinLoss(){
     <div class="li"><span class="li-dot" style="background:#BA0517"></span>Lost<span class="li-val">${fmt(lostV)}</span></div>
     <div class="li"><span class="li-dot" style="background:#0176D3"></span>Open<span class="li-val">${fmt(openV)}</span></div>`;
   row.append(dw,leg);wrap.appendChild(row);
-  if(charts.winloss)charts.winloss.destroy();
   charts.winloss=new Chart(cvs,{type:'doughnut',
     data:{labels:['Won','Lost','Open'],datasets:[{data:[wonV,lostV,openV],backgroundColor:['#2E844A','#BA0517','#0176D3'],borderWidth:2,borderColor:'#fff',hoverOffset:6}]},
     options:{cutout:'68%',animation:{animateRotate:true,duration:900},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.label}: ${fmt(c.raw)}`}}}}
@@ -596,9 +605,9 @@ function renderTrend(){
       {label:'Pipeline',data:keys.map(k=>mMap[k].val),borderColor:'#9050E9',backgroundColor:'rgba(144,80,233,.08)',tension:.4,fill:true,pointRadius:3,pointHoverRadius:5},
       {label:'Won',data:keys.map(k=>mMap[k].won),borderColor:'#2E844A',backgroundColor:'rgba(46,132,74,.08)',tension:.4,fill:true,pointRadius:3,pointHoverRadius:5},
     ]},
-    options:{responsive:true,animation:{duration:900},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:900},
       plugins:{legend:{labels:{font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.raw)}`}}},
-      scales:{y:{ticks:{callback:v=>fmt(v),font:{size:10}},grid:{color:'#F3F3F3'}},x:{ticks:{font:{size:10}},grid:{display:false}}}}
+      scales:{y:{ticks:{callback:v=>fmt(v),font:{size:10}},grid:{color:'#EBEBEA'}},x:{ticks:{font:{size:10}},grid:{display:false}}}}
   });
 }
 
@@ -615,7 +624,7 @@ function renderRepLeaderboard(){
   const rankCls=i=>i===0?'g':i===1?'s':i===2?'b':'';
   const row=([name,s],i)=>`<tr>
     <td><span class="rank ${rankCls(i)}">${i+1}</span></td>
-    <td><strong style="font-size:12.5px">${name}</strong>
+    <td><strong style="font-size:12.5px">${he(name)}</strong>
       <div class="progress-bar"><div class="progress-fill" data-w="${(s.val/maxVal*100).toFixed(1)}"></div></div></td>
     <td>${s.cnt}</td><td>${fmt(s.val)}</td><td>${s.won}</td></tr>`;
   document.getElementById('tbl-reps-top').innerHTML=sorted.slice(0,5).map(row).join('');
@@ -623,17 +632,17 @@ function renderRepLeaderboard(){
   const rest=sorted.length-5;
   const btn=document.getElementById('btn-reps');
   btn.textContent=rest>0?`Show ${rest} more ▾`:'';btn.style.display=rest>0?'inline':'none';
-  setTimeout(()=>document.querySelectorAll('.progress-fill').forEach(el=>el.style.width=el.dataset.w+'%'),300);
+  setTimeout(()=>document.querySelectorAll('#tbl-reps-top .progress-fill').forEach(el=>el.style.width=el.dataset.w+'%'),300);
 }
 
 /* ── TOP DEALS ── */
 function renderTopDeals(){
   const sorted=[...deals].sort((a,b)=>b._value-a._value);
   const row=d=>`<tr>
-    <td><strong style="font-size:12.5px">${d._name}</strong><div style="font-size:10px;color:var(--sf-text3)">${d._company||''}</div></td>
-    <td><span class="badge ${badgeCls(d._stage)}">${d._stage}</span></td>
+    <td><strong style="font-size:12.5px">${he(d._name)}</strong><div style="font-size:10px;color:var(--sf-text3)">${he(d._company)}</div></td>
+    <td><span class="badge ${badgeCls(d._stage)}">${he(d._stage)}</span></td>
     <td>${fmt(d._value)}</td>
-    <td style="font-size:11px;color:var(--sf-text3)">${d._repName}</td></tr>`;
+    <td style="font-size:11px;color:var(--sf-text3)">${he(d._repName)}</td></tr>`;
   document.getElementById('tbl-deals-top').innerHTML=sorted.slice(0,5).map(row).join('');
   document.getElementById('tbl-deals-more').innerHTML=sorted.slice(5).map(row).join('');
   const rest=sorted.length-5;
@@ -648,9 +657,9 @@ function renderProductChart(){
   if(charts.products)charts.products.destroy();
   charts.products=new Chart(document.getElementById('chart-products'),{type:'bar',
     data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1]),backgroundColor:COLORS,borderRadius:4,borderSkipped:false}]},
-    options:{indexAxis:'y',responsive:true,animation:{duration:900,delay:ctx=>ctx.dataIndex*60},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:900,delay:ctx=>ctx.dataIndex*60},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmt(c.raw)}}},
-      scales:{x:{ticks:{callback:v=>fmt(v),font:{size:10}},grid:{color:'#F3F3F3'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}
+      scales:{x:{ticks:{callback:v=>fmt(v),font:{size:10}},grid:{color:'#EBEBEA'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}
   });
 }
 
@@ -659,17 +668,17 @@ function renderRegional(){
   const rgMap={};
   deals.forEach(d=>{const r=d._region||'Unknown';rgMap[r]=(rgMap[r]||0)+d._value;});
   const sorted=Object.entries(rgMap).sort((a,b)=>b[1]-a[1]);
-  const cvs=document.createElement('canvas');cvs.width=120;cvs.height=120;
+  if(charts.regional){charts.regional.destroy();charts.regional=null;}
   const wrap=document.getElementById('wb-regional');wrap.innerHTML='';
+  const cvs=document.createElement('canvas');cvs.width=120;cvs.height=120;
   const row=document.createElement('div');row.className='donut-row';
   const dw=document.createElement('div');dw.className='donut-wrap';dw.style.width='120px';
   const center=document.createElement('div');center.className='donut-center';
   center.innerHTML=`<div class="dc-val" style="font-size:15px">${sorted.length}</div><div class="dc-lbl">Regions</div>`;
   dw.append(cvs,center);
   const leg=document.createElement('div');leg.className='legend';
-  leg.innerHTML=sorted.map(([r,v],i)=>`<div class="li"><span class="li-dot" style="background:${COLORS[i%COLORS.length]}"></span>${r}<span class="li-val">${fmt(v)}</span></div>`).join('');
+  leg.innerHTML=sorted.map(([r,v],i)=>`<div class="li"><span class="li-dot" style="background:${COLORS[i%COLORS.length]}"></span>${he(r)}<span class="li-val">${fmt(v)}</span></div>`).join('');
   row.append(dw,leg);wrap.appendChild(row);
-  if(charts.regional)charts.regional.destroy();
   charts.regional=new Chart(cvs,{type:'doughnut',
     data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1]),backgroundColor:COLORS.slice(0,sorted.length),borderWidth:2,borderColor:'#fff',hoverOffset:5}]},
     options:{cutout:'65%',animation:{animateRotate:true,duration:900},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.label}: ${fmt(c.raw)}`}}}}
@@ -683,9 +692,9 @@ function renderSectorChart(){
   if(charts.sector)charts.sector.destroy();
   charts.sector=new Chart(document.getElementById('chart-sector'),{type:'bar',
     data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1]),backgroundColor:COLORS,borderRadius:4,borderSkipped:false}]},
-    options:{indexAxis:'y',responsive:true,animation:{duration:900,delay:ctx=>ctx.dataIndex*60},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:{duration:900,delay:ctx=>ctx.dataIndex*60},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmt(c.raw)}}},
-      scales:{x:{ticks:{callback:v=>fmt(v),font:{size:10}},grid:{color:'#F3F3F3'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}
+      scales:{x:{ticks:{callback:v=>fmt(v),font:{size:10}},grid:{color:'#EBEBEA'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}
   });
 }
 
@@ -697,9 +706,9 @@ function renderManagerChart(){
   if(charts.managers)charts.managers.destroy();
   charts.managers=new Chart(document.getElementById('chart-managers'),{type:'bar',
     data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1].val),backgroundColor:COLORS,borderRadius:4,borderSkipped:false}]},
-    options:{responsive:true,animation:{duration:900,delay:ctx=>ctx.dataIndex*80},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:900,delay:ctx=>ctx.dataIndex*80},
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmt(c.raw)} (${mMap[c.label]?.cnt} deals)`}}},
-      scales:{y:{ticks:{callback:v=>fmt(v),font:{size:10}},grid:{color:'#F3F3F3'}},x:{ticks:{font:{size:10}},grid:{display:false}}}}
+      scales:{y:{ticks:{callback:v=>fmt(v),font:{size:10}},grid:{color:'#EBEBEA'}},x:{ticks:{font:{size:10}},grid:{display:false}}}}
   });
 }
 
@@ -746,8 +755,8 @@ window.addEventListener('load',()=>{
 function dataSummary(){
   if(!deals.length)return'No pipeline data loaded.';
   const total=deals.reduce((s,d)=>s+d._value,0);
-  const won=deals.filter(d=>/won|closed.won/i.test(d._stage));
-  const lost=deals.filter(d=>/lost|closed.lost/i.test(d._stage));
+  const won=deals.filter(d=>/\bwon\b|closed[\s.-]?won/i.test(d._stage));
+  const lost=deals.filter(d=>/\blost\b|closed[\s.-]?lost/i.test(d._stage));
   const open=deals.filter(d=>!/won|lost|closed/i.test(d._stage));
   const closed=won.length+lost.length;
   const wr=closed?(won.length/closed*100).toFixed(1)+'%':'N/A';
