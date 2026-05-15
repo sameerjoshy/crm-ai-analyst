@@ -179,6 +179,39 @@
     .send-btn { background: var(--sf-blue); color: #fff; border: none; padding: 9px 20px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; align-self: flex-end; transition: all .2s; }
     .send-btn:hover:not(:disabled) { background: var(--sf-blue-dk); }
     .send-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* ── Mode bar ── */
+    .mode-bar { background: #fff; border: 1px solid var(--sf-border); border-radius: var(--r); padding: 10px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; box-shadow: var(--sf-shadow); }
+    .mode-label { font-size: 11px; font-weight: 700; color: var(--sf-text3); text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+    .mode-btn { padding: 5px 14px; border-radius: 20px; border: 1.5px solid var(--sf-border); background: #fff; color: var(--sf-text2); font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .18s; }
+    .mode-btn:hover { border-color: var(--sf-blue); color: var(--sf-blue); background: #EFF6FF; }
+    .mode-btn.active { background: var(--sf-blue); border-color: var(--sf-blue); color: #fff; }
+    .mode-sep { width: 1px; height: 22px; background: var(--sf-border); margin: 0 6px; flex-shrink: 0; }
+    .report-btn { padding: 5px 12px; border-radius: 6px; border: 1.5px solid var(--sf-border); background: var(--sf-bg); color: var(--sf-text2); font-size: 12px; font-weight: 600; cursor: pointer; transition: all .18s; }
+    .report-btn:hover { border-color: var(--sf-purple); color: var(--sf-purple); background: #F5EFFB; }
+
+    /* ── Prompt chips ── */
+    .prompt-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 620px; margin-top: 14px; }
+    .prompt-chip { padding: 7px 15px; border-radius: 20px; border: 1.5px solid var(--sf-border); background: #fff; color: var(--sf-text2); font-size: 12.5px; cursor: pointer; transition: all .18s; text-align: left; }
+    .prompt-chip:hover { border-color: var(--sf-blue); color: var(--sf-blue); background: #EFF6FF; transform: translateY(-1px); box-shadow: 0 2px 8px rgba(1,118,211,.12); }
+
+    /* ── Follow-up chips ── */
+    .followup-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 8px; padding-left: 40px; animation: fadeIn .3s ease; }
+    .followup-lbl { font-size: 11px; color: var(--sf-text3); font-weight: 700; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+    .followup-chip { padding: 4px 12px; border-radius: 16px; border: 1.5px solid #BADCFB; background: #EFF6FF; color: var(--sf-blue); font-size: 12px; cursor: pointer; transition: all .15s; }
+    .followup-chip:hover { background: var(--sf-blue); color: #fff; border-color: var(--sf-blue); }
+
+    /* ── Markdown in chat bubbles ── */
+    .msg-bubble h2 { font-size: 14px; font-weight: 700; color: var(--sf-navy); margin: 12px 0 5px; border-bottom: 1px solid var(--sf-border); padding-bottom: 3px; }
+    .msg-bubble h2:first-child { margin-top: 0; }
+    .msg-bubble h3 { font-size: 13px; font-weight: 700; color: var(--sf-blue-dk); margin: 9px 0 4px; }
+    .msg-bubble p { margin-bottom: 5px; }
+    .msg-bubble ul { padding-left: 18px; margin: 4px 0 6px; }
+    .msg-bubble li { margin-bottom: 3px; line-height: 1.55; }
+    .msg-bubble table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+    .msg-bubble th { background: #F3F3F3; padding: 5px 10px; text-align: left; font-size: 11px; font-weight: 700; border-bottom: 1px solid var(--sf-border); color: var(--sf-text3); text-transform: uppercase; letter-spacing: .3px; }
+    .msg-bubble td { padding: 5px 10px; border-bottom: 1px solid #F5F5F4; vertical-align: top; }
+    .msg-bubble tr:last-child td { border-bottom: none; }
   </style>
 </head>
 <body>
@@ -325,14 +358,26 @@
         <button class="btn-save" onclick="saveKey()">Save Key</button>
         <span id="api-key-status"></span>
       </div>
+      <div class="mode-bar">
+        <span class="mode-label">Mode:</span>
+        <button class="mode-btn active" onclick="switchMode('overview',this)">🔭 Overview</button>
+        <button class="mode-btn" onclick="switchMode('risk',this)">⚠️ Risk Radar</button>
+        <button class="mode-btn" onclick="switchMode('coach',this)">🎯 Rep Coach</button>
+        <button class="mode-btn" onclick="switchMode('forecast',this)">📈 Forecast</button>
+        <div class="mode-sep"></div>
+        <button class="report-btn" onclick="runReport('weekly')">📋 Weekly Review</button>
+        <button class="report-btn" onclick="runReport('qbr')">📊 QBR</button>
+        <button class="report-btn" onclick="runReport('scorecard')">🏆 Rep Scorecard</button>
+      </div>
       <div id="warn-bar" class="warn-bar" style="display:none">⚠️ No pipeline data loaded — upload CSVs on the Dashboard tab first.</div>
       <div class="chat-wrap">
         <div class="chat-msgs" id="chat-msgs">
-          <div class="empty-state">
+          <div class="empty-state" id="empty-state">
             <div class="es-ico">🤖</div>
             <h3>AI Pipeline Analyst</h3>
-            <p>Ask anything about your pipeline. I surface risks, opportunities, rep performance, and strategic focus areas.</p>
-            <p style="margin-top:10px;font-size:11px">"What's at risk this quarter?" &nbsp;·&nbsp; "Who are my top reps?" &nbsp;·&nbsp; "Which stage has most value stuck?"</p>
+            <p>Select a mode above and ask anything about your pipeline — or click a suggested question to get started.</p>
+            <p style="margin-top:5px;font-size:12px;color:var(--sf-text3)">Mode: <strong id="mode-name-display">🔭 Overview</strong></p>
+            <div class="prompt-chips" id="prompt-chips"></div>
           </div>
         </div>
         <div class="chat-input-area">
@@ -759,6 +804,7 @@ function saveKey(){
 }
 window.addEventListener('load',()=>{
   if(sessionStorage.getItem('groq_api_key'))document.getElementById('api-key-status').textContent='✓ Key loaded from session';
+  renderPromptChips('overview');
 });
 
 /* ── DATA SUMMARY ── */
@@ -799,22 +845,170 @@ ${Object.entries(byProd).sort((a,b)=>b[1].val-a[1].val).map(([p,v])=>`- ${p}: ${
 ${deals.slice(0,25).map(d=>`${d._name}|${d._company||''}|${d._stage}|${fmt(d._value)}|${d._repName}|${d._region||''}|${d._product||''}`).join('\n')}`;
 }
 
-/* ── CHAT ── */
+/* ── ANALYST MODES ── */
+const MODES={
+  overview:{
+    label:'🔭 Overview',
+    persona:'You are an expert CRO AI Analyst providing pipeline overview, strategic insights, and executive-level summaries for SaaS sales leaders.',
+    chips:["What's our overall pipeline health?","Which stage has the most deal value stuck?","What are the top 5 deals to focus on now?","Summarise performance across all regions"],
+    followups:["Which region is underperforming relative to its deal count?","How does our win rate compare to typical SaaS benchmarks?","What product lines are driving the most revenue?","Which accounts have the most active deals?"]
+  },
+  risk:{
+    label:'⚠️ Risk Radar',
+    persona:'You are a CRO risk analyst. Surface pipeline risks: stalled deals, rep underperformance, account concentration, lost deal patterns, and early warning signals. Be direct and specific.',
+    chips:["What deals are most at risk of being lost?","Which reps have the weakest performance metrics?","Are we over-concentrated in any single region or account?","What patterns do our lost deals share?"],
+    followups:["Which open deals have been in stage the longest?","What is the single biggest risk to revenue this quarter?","Which products have the worst win rates?","What percentage of pipeline comes from our top 3 accounts?"]
+  },
+  coach:{
+    label:'🎯 Rep Coach',
+    persona:'You are an expert sales coach and VP of Sales analysing rep performance data. Identify coaching opportunities, celebrate top performers, and give specific, actionable development advice for each tier.',
+    chips:["Who are my top 3 performers and what makes them successful?","Which reps need immediate coaching attention?","Who has high deal volume but a low win rate?","Compare team performance across regions"],
+    followups:["What specific coaching plan would you recommend for the bottom performer?","Which rep shows the most improvement potential?","How should I structure next month's team meeting based on this data?","Which reps should own the largest strategic accounts?"]
+  },
+  forecast:{
+    label:'📈 Forecast',
+    persona:'You are a revenue forecasting analyst with expertise in SaaS pipeline modelling. Provide data-driven revenue projections, identify likely closers, flag forecast risks, and give the CRO a clear confidence level.',
+    chips:["What is our realistic revenue forecast?","Which open deals are most likely to close soon?","How confident should we be in hitting our numbers?","What is the best-case vs worst-case revenue scenario?"],
+    followups:["What would need to happen to exceed forecast by 20%?","Which stage conversion rates are weakest in our funnel?","How many deals need to close to hit a $12M annual target?","What is the average sales cycle length from Engaging to Won?"]
+  }
+};
+
+/* ── ONE-CLICK REPORTS ── */
+const REPORTS={
+  weekly:{
+    label:'📋 Weekly Pipeline Review',
+    prompt:`Generate a comprehensive Weekly Pipeline Review report. Use these exact sections with markdown headers:\n\n## EXECUTIVE SUMMARY\n3-4 bullet points of the most important metrics.\n\n## PIPELINE HEALTH\nTotal deals, won, lost, open with specific numbers.\n\n## WIN RATE ANALYSIS\nOverall win rate and breakdown by region.\n\n## TOP DEALS TO WATCH\nTop 5 by value — current stage and a specific recommendation for each.\n\n## REP PERFORMANCE HIGHLIGHTS\nTop 2 performers and 1 rep needing immediate attention.\n\n## KEY RISKS & ACTIONS\n3-5 specific risks with a recommended action for each.\n\n## PRIORITIES FOR NEXT 7 DAYS\n3 concrete actions the CRO should take this week.\n\nBe specific: use rep names, deal names, exact numbers and percentages from the data.`
+  },
+  qbr:{
+    label:'📊 QBR Summary',
+    prompt:`Generate a Quarterly Business Review (QBR) summary brief. Use these sections:\n\n## QBR SCORECARD\nKey metrics: total pipeline, won revenue, win rate, avg deal size, deals by stage.\n\n## REVENUE PERFORMANCE ANALYSIS\nDeep dive on revenue patterns and deal value distribution.\n\n## WIN RATE DEEP DIVE\nOverall, by region, by product — what is working and what is not.\n\n## TEAM PERFORMANCE SUMMARY\nRegional breakdown, top performers, overall team health assessment.\n\n## PRODUCT MIX ANALYSIS\nRevenue contribution by product, top-selling products.\n\n## STRATEGIC WINS & LESSONS\nWhat drove wins, what caused losses — pattern analysis.\n\n## NEXT QUARTER PRIORITIES\n5 strategic recommendations for the CRO.\n\nWrite as a senior analyst preparing a board-level presentation. Specific, data-driven, no filler.`
+  },
+  scorecard:{
+    label:'🏆 Rep Scorecard',
+    prompt:`Generate a complete Rep Performance Scorecard. Include:\n\n## LEADERBOARD\nAll reps sorted by won revenue. Columns: Rep, Won Deals, Lost Deals, Win Rate, Won Revenue.\n\n## PERFORMANCE TIERS\n**Elite** (top 20%): what makes these reps successful?\n**On Track** (middle 60%): what should they focus on?\n**Needs Coaching** (bottom 20%): specific development areas.\n\n## TOP PERFORMERS SPOTLIGHT\nDetailed breakdown of top 3 reps — deal patterns, win habits, what to replicate across the team.\n\n## COACHING PRIORITIES\nBottom 3 reps with specific, actionable coaching recommendations for their manager.\n\n## REGIONAL TEAM COMPARISON\nWhich region has the strongest overall team and why.\n\n## MANAGER ACTION ITEMS\n1-2 specific actions for each regional team manager.\n\nSort by won revenue descending. Use the actual rep names and numbers from the data.`
+  }
+};
+
+let currentMode='overview';
+
+/* ── CHAT HELPERS ── */
 function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
-function esc(t){
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/\n/g,'<br>')
+
+function switchMode(mode,btn){
+  currentMode=mode;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const nameEl=document.getElementById('mode-name-display');
+  if(nameEl)nameEl.textContent=MODES[mode].label;
+  renderPromptChips(mode);
+}
+
+function renderPromptChips(mode){
+  const c=document.getElementById('prompt-chips');
+  if(!c)return;
+  c.innerHTML=MODES[mode].chips.map(q=>`<button class="prompt-chip" onclick="sendChip(this)">${q}</button>`).join('');
+}
+
+function sendChip(btn){
+  const input=document.getElementById('chat-input');
+  input.value=btn.textContent;
+  sendMessage();
+}
+
+function renderFollowupChips(afterDiv){
+  const chips=[...MODES[currentMode].followups].sort(()=>Math.random()-.5).slice(0,3);
+  const row=document.createElement('div');
+  row.className='followup-row';
+  row.innerHTML=`<span class="followup-lbl">Follow up:</span>`+chips.map(q=>`<button class="followup-chip" onclick="sendChip(this)">${q}</button>`).join('');
+  afterDiv.after(row);
+}
+
+/* ── SMART CONTEXT ── */
+function getSmartContext(question){
+  const q=question.toLowerCase();
+  let extra='';
+  const repNames=[...new Set(deals.map(d=>d._repName).filter(Boolean))];
+  const mentionedRep=repNames.find(r=>{
+    if(!r)return false;
+    const parts=r.toLowerCase().split(' ');
+    return parts.length>=2&&q.includes(parts[0])&&q.includes(parts[parts.length-1]);
+  });
+  const regions=[...new Set(deals.map(d=>d._region).filter(Boolean))];
+  const mentionedRegion=regions.find(r=>r&&q.includes(r.toLowerCase()));
+  const products=[...new Set(deals.map(d=>d._product).filter(Boolean))];
+  const mentionedProduct=products.find(p=>p&&q.includes(p.toLowerCase()));
+  const accounts=[...new Set(deals.map(d=>d._company).filter(Boolean))];
+  const mentionedAccount=accounts.find(a=>a&&a.length>4&&q.includes(a.toLowerCase()));
+  if(mentionedRep){
+    const rd=deals.filter(d=>d._repName===mentionedRep);
+    extra+=`\n\n### All ${rd.length} deals for ${mentionedRep}\n`+rd.map(d=>`${d._name||''}|${d._company||''}|${d._stage}|${fmt(d._value)}|${d._close||''}`).join('\n');
+  }
+  if(mentionedRegion){
+    const rd=deals.filter(d=>d._region===mentionedRegion).slice(0,60);
+    extra+=`\n\n### ${rd.length} deals in ${mentionedRegion} region\n`+rd.map(d=>`${d._name||''}|${d._company||''}|${d._stage}|${fmt(d._value)}|${d._repName}`).join('\n');
+  }
+  if(mentionedProduct){
+    const pd=deals.filter(d=>d._product===mentionedProduct).slice(0,60);
+    extra+=`\n\n### ${pd.length} deals for product: ${mentionedProduct}\n`+pd.map(d=>`${d._name||''}|${d._company||''}|${d._stage}|${fmt(d._value)}|${d._repName}`).join('\n');
+  }
+  if(mentionedAccount){
+    const ad=deals.filter(d=>d._company===mentionedAccount);
+    extra+=`\n\n### All ${ad.length} deals for account: ${mentionedAccount}\n`+ad.map(d=>`${d._name||''}|${d._stage}|${fmt(d._value)}|${d._repName}|${d._close||''}`).join('\n');
+  }
+  return dataSummary()+extra;
+}
+
+/* ── MARKDOWN RENDERER ── */
+function markdownToHtml(text){
+  const lines=text.split('\n');
+  const out=[];
+  let inList=false,inTable=false;
+  const safe=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inline=t=>safe(t)
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
     .replace(/\*(.+?)\*/g,'<em>$1</em>')
     .replace(/`(.+?)`/g,'<code style="background:#F3F3F3;padding:1px 5px;border-radius:3px;font-family:monospace">$1</code>');
+  const closeList=()=>{if(inList){out.push('</ul>');inList=false;}};
+  const closeTable=()=>{if(inTable){out.push('</tbody></table>');inTable=false;}};
+  for(let i=0;i<lines.length;i++){
+    const raw=lines[i];
+    if(/^##\s/.test(raw)){closeList();closeTable();out.push(`<h2>${inline(raw.replace(/^##\s/,''))}</h2>`);continue;}
+    if(/^###\s/.test(raw)){closeList();closeTable();out.push(`<h3>${inline(raw.replace(/^###\s/,''))}</h3>`);continue;}
+    if(/^#\s/.test(raw)){closeList();closeTable();out.push(`<h2>${inline(raw.replace(/^#\s/,''))}</h2>`);continue;}
+    if(raw.startsWith('|')){
+      closeList();
+      const cells=raw.split('|').slice(1,-1);
+      if(cells.every(c=>/^[-:\s]+$/.test(c))){
+        if(out.length&&out[out.length-1].includes('<td>')){
+          out[out.length-1]=out[out.length-1].replace(/<td>/g,'<th>').replace(/<\/td>/g,'</th>');
+        }
+        continue;
+      }
+      if(!inTable){out.push('<table><tbody>');inTable=true;}
+      out.push(`<tr>${cells.map(c=>`<td>${inline(c.trim())}</td>`).join('')}</tr>`);
+      continue;
+    }else{closeTable();}
+    if(/^[-*]\s/.test(raw)){
+      closeTable();
+      if(!inList){out.push('<ul>');inList=true;}
+      out.push(`<li>${inline(raw.slice(2))}</li>`);
+      continue;
+    }else if(inList&&raw.trim()){closeList();}
+    if(!raw.trim()){closeList();closeTable();continue;}
+    if(!inList)out.push(`<p>${inline(raw)}</p>`);
+  }
+  closeList();closeTable();
+  return out.join('');
 }
+
+/* ── MESSAGE RENDERING ── */
 function addMsg(role,html,rawText){
   const box=document.getElementById('chat-msgs');
   box.querySelector('.empty-state')?.remove();
   const div=document.createElement('div');div.className=`message ${role}`;
   div.innerHTML=`<div class="msg-av">${role==='user'?'👤':'🤖'}</div>
     <div class="msg-body"><div class="msg-role">${role==='user'?'You':'AI Analyst'}</div>
-    <div class="msg-bubble">${html||esc(rawText||'')}</div></div>`;
+    <div class="msg-bubble">${html||markdownToHtml(rawText||'')}</div></div>`;
   box.appendChild(div);box.scrollTop=box.scrollHeight;
   return div;
 }
@@ -825,6 +1019,36 @@ function addThinking(){
   box.appendChild(div);box.scrollTop=box.scrollHeight;
   return div;
 }
+
+/* ── ONE-CLICK REPORTS ── */
+async function runReport(type){
+  const apiKey=sessionStorage.getItem('groq_api_key');
+  if(!apiKey){alert('Please save your Groq API key first.');return;}
+  if(!deals.length){alert('Upload your CSV files on the Dashboard tab first.');return;}
+  const report=REPORTS[type];
+  document.getElementById('send-btn').disabled=true;
+  document.querySelectorAll('.followup-row').forEach(r=>r.remove());
+  addMsg('user',null,`Generate ${report.label}`);
+  history.push({role:'user',content:report.prompt});
+  const thinking=addThinking();
+  const system=`You are an expert CRO AI Analyst with deep SaaS sales expertise. CRM data:\n\n${dataSummary()}\n\nFormat with markdown headers (##, ###), bullet points, and tables where appropriate. Be specific: use rep names, dollar amounts, and percentages from the data.`;
+  try{
+    const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+      body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'system',content:system},...history.slice(-12)],temperature:0.3,max_tokens:2000})
+    });
+    const data=await res.json();thinking.remove();
+    if(!res.ok){addMsg('assistant',null,`Error: ${data.error?.message||`HTTP ${res.status}`}`);history.pop();return;}
+    const answer=data.choices[0].message.content;
+    history.push({role:'assistant',content:answer});
+    const msgDiv=addMsg('assistant',markdownToHtml(answer));
+    renderFollowupChips(msgDiv);
+  }catch(e){thinking.remove();addMsg('assistant',null,`Network error: ${e.message}`);history.pop();}
+  finally{document.getElementById('send-btn').disabled=false;document.getElementById('chat-input').focus();}
+}
+
+/* ── SEND MESSAGE ── */
 async function sendMessage(){
   const input=document.getElementById('chat-input');
   const q=input.value.trim();if(!q)return;
@@ -832,9 +1056,11 @@ async function sendMessage(){
   if(!apiKey){alert('Please save your Groq API key first.');return;}
   input.value='';input.style.height='auto';
   document.getElementById('send-btn').disabled=true;
+  document.querySelectorAll('.followup-row').forEach(r=>r.remove());
   addMsg('user',null,q);history.push({role:'user',content:q});
   const thinking=addThinking();
-  const system=`You are an expert CRO AI Analyst with deep SaaS sales expertise. CRM data:\n\n${dataSummary()}\n\nProvide specific, data-driven insights. Reference deal names, rep names, dollar amounts. Be concise but actionable. Use bullets where helpful.`;
+  const mode=MODES[currentMode];
+  const system=`${mode.persona}\n\nCRM Data:\n\n${getSmartContext(q)}\n\nFormat your response with markdown where helpful (## headers, bullet points, **bold** for key figures). Be specific: reference rep names, deal names, dollar amounts, and percentages directly from the data. Be concise but actionable.`;
   try{
     const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
       method:'POST',
@@ -845,7 +1071,8 @@ async function sendMessage(){
     if(!res.ok){addMsg('assistant',null,`Error: ${data.error?.message||`HTTP ${res.status}`}`);history.pop();return;}
     const answer=data.choices[0].message.content;
     history.push({role:'assistant',content:answer});
-    addMsg('assistant',esc(answer));
+    const msgDiv=addMsg('assistant',markdownToHtml(answer));
+    renderFollowupChips(msgDiv);
   }catch(e){thinking.remove();addMsg('assistant',null,`Network error: ${e.message}`);history.pop();}
   finally{document.getElementById('send-btn').disabled=false;input.focus();}
 }
