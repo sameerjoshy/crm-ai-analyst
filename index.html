@@ -484,7 +484,7 @@ function resetAll(){
 }
 
 /* ── HELPERS ── */
-const fmt=n=>n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(0)+'K':'$'+Math.round(n).toLocaleString();
+const fmt=n=>n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e5?'$'+(n/1e3).toFixed(0)+'K':n>=1e3?'$'+(n/1e3).toFixed(1)+'K':'$'+Math.round(n).toLocaleString();
 const badgeCls=s=>/won|win/i.test(s)?'bwon':/lost/i.test(s)?'blost':'bopen';
 const COLORS=['#0176D3','#06A59A','#9050E9','#2E844A','#FE9339','#BA0517','#C9A227','#14B8A6','#E4A201','#3BA755'];
 
@@ -520,12 +520,12 @@ function renderKPIs(){
   const open=deals.filter(d=>!/won|lost|closed/i.test(d._stage));
   const closed=won.length+lost.length;
   const wr=closed?won.length/closed*100:0;
-  const avg=open.length?open.reduce((s,d)=>s+d._value,0)/open.length:0;
+  const avg=won.length?won.reduce((s,d)=>s+d._value,0)/won.length:0;
   const kpis=[
     {lbl:'Total Pipeline',val:total,sub:`${deals.length} total deals`,ico:'💰',pct:false},
     {lbl:'Open Pipeline',val:open.reduce((s,d)=>s+d._value,0),sub:`${open.length} open deals`,ico:'📂',pct:false},
     {lbl:'Win Rate',val:wr,sub:`${won.length} won / ${closed} closed`,ico:'🎯',pct:true},
-    {lbl:'Avg Deal Size',val:avg,sub:'open pipeline avg',ico:'📊',pct:false},
+    {lbl:'Avg Deal Size (Won)',val:avg,sub:`based on ${won.length} won deals`,ico:'📊',pct:false},
     {lbl:'Closed Won Rev.',val:won.reduce((s,d)=>s+d._value,0),sub:`${won.length} deals won`,ico:'✅',pct:false},
   ];
   const row=document.getElementById('kpi-row');
@@ -560,14 +560,14 @@ function renderStageChart(){
 
 /* ── WIN/LOSS DONUT ── */
 function renderWinLoss(){
-  const won=deals.filter(d=>/won|win/i.test(d._stage));
-  const lost=deals.filter(d=>/lost/i.test(d._stage));
+  const won=deals.filter(d=>/\bwon\b|closed[\s.-]?won/i.test(d._stage));
+  const lost=deals.filter(d=>/\blost\b|closed[\s.-]?lost/i.test(d._stage));
   const open=deals.filter(d=>!/won|lost|closed/i.test(d._stage));
   const wonV=won.reduce((s,d)=>s+d._value,0);
   const lostV=lost.reduce((s,d)=>s+d._value,0);
   const openV=open.reduce((s,d)=>s+d._value,0);
   const closed=won.length+lost.length;
-  const wr=closed?(won.length/closed*100).toFixed(0)+'%':'N/A';
+  const wr=closed?(won.length/closed*100).toFixed(1)+'%':'N/A';
   if(charts.winloss){charts.winloss.destroy();charts.winloss=null;}
   const wrap=document.getElementById('wb-winloss');wrap.innerHTML='';
   const cvs=document.createElement('canvas');cvs.width=130;cvs.height=130;
@@ -666,8 +666,14 @@ function renderProductChart(){
 /* ── REGIONAL DONUT ── */
 function renderRegional(){
   const rgMap={};
-  deals.forEach(d=>{const r=d._region||'Unknown';rgMap[r]=(rgMap[r]||0)+d._value;});
-  const sorted=Object.entries(rgMap).sort((a,b)=>b[1]-a[1]);
+  deals.forEach(d=>{
+    const r=d._region||'Unknown';
+    if(!rgMap[r])rgMap[r]={val:0,won:0,lost:0};
+    rgMap[r].val+=d._value;
+    if(/\bwon\b/i.test(d._stage))rgMap[r].won++;
+    else if(/\blost\b/i.test(d._stage))rgMap[r].lost++;
+  });
+  const sorted=Object.entries(rgMap).sort((a,b)=>b[1].val-a[1].val);
   if(charts.regional){charts.regional.destroy();charts.regional=null;}
   const wrap=document.getElementById('wb-regional');wrap.innerHTML='';
   const cvs=document.createElement('canvas');cvs.width=120;cvs.height=120;
@@ -677,10 +683,14 @@ function renderRegional(){
   center.innerHTML=`<div class="dc-val" style="font-size:15px">${sorted.length}</div><div class="dc-lbl">Regions</div>`;
   dw.append(cvs,center);
   const leg=document.createElement('div');leg.className='legend';
-  leg.innerHTML=sorted.map(([r,v],i)=>`<div class="li"><span class="li-dot" style="background:${COLORS[i%COLORS.length]}"></span>${he(r)}<span class="li-val">${fmt(v)}</span></div>`).join('');
+  leg.innerHTML=sorted.map(([r,v],i)=>{
+    const closed=v.won+v.lost;
+    const wr=closed?(v.won/closed*100).toFixed(1)+'%':'N/A';
+    return`<div class="li"><span class="li-dot" style="background:${COLORS[i%COLORS.length]}"></span>${he(r)}<span class="li-val">${fmt(v.val)} <span style="color:#3E3E3C;font-size:11px">(WR: ${wr})</span></span></div>`;
+  }).join('');
   row.append(dw,leg);wrap.appendChild(row);
   charts.regional=new Chart(cvs,{type:'doughnut',
-    data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1]),backgroundColor:COLORS.slice(0,sorted.length),borderWidth:2,borderColor:'#fff',hoverOffset:5}]},
+    data:{labels:sorted.map(s=>s[0]),datasets:[{data:sorted.map(s=>s[1].val),backgroundColor:COLORS.slice(0,sorted.length),borderWidth:2,borderColor:'#fff',hoverOffset:5}]},
     options:{cutout:'65%',animation:{animateRotate:true,duration:900},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.label}: ${fmt(c.raw)}`}}}}
   });
 }
@@ -760,25 +770,29 @@ function dataSummary(){
   const open=deals.filter(d=>!/won|lost|closed/i.test(d._stage));
   const closed=won.length+lost.length;
   const wr=closed?(won.length/closed*100).toFixed(1)+'%':'N/A';
+  const wonRevenue=won.reduce((s,d)=>s+d._value,0);
+  const avgDealSize=won.length?(wonRevenue/won.length).toFixed(0):0;
   const byStage={},byRep={},byRegion={},byProd={};
   deals.forEach(d=>{
     const s=d._stage;if(!byStage[s])byStage[s]={cnt:0,val:0};byStage[s].cnt++;byStage[s].val+=d._value;
-    const r=d._repName;if(!byRep[r])byRep[r]={cnt:0,val:0,won:0};byRep[r].cnt++;byRep[r].val+=d._value;if(/won/i.test(s))byRep[r].won++;
-    const g=d._region||'Unknown';if(!byRegion[g])byRegion[g]={cnt:0,val:0};byRegion[g].cnt++;byRegion[g].val+=d._value;
+    const r=d._repName;if(!byRep[r])byRep[r]={cnt:0,val:0,won:0,lost:0};byRep[r].cnt++;byRep[r].val+=d._value;
+    if(/\bwon\b/i.test(s))byRep[r].won++;else if(/\blost\b/i.test(s))byRep[r].lost++;
+    const g=d._region||'Unknown';if(!byRegion[g])byRegion[g]={cnt:0,val:0,won:0,lost:0};byRegion[g].cnt++;byRegion[g].val+=d._value;
+    if(/\bwon\b/i.test(s))byRegion[g].won++;else if(/\blost\b/i.test(s))byRegion[g].lost++;
     const p=d._product||'Unknown';if(!byProd[p])byProd[p]={cnt:0,val:0};byProd[p].cnt++;byProd[p].val+=d._value;
   });
   const top5=[...deals].sort((a,b)=>b._value-a._value).slice(0,5);
   return`## CRM Pipeline Summary
-Total: ${deals.length} deals | ${fmt(total)} | Win rate: ${wr}
-Open: ${open.length} / ${fmt(open.reduce((s,d)=>s+d._value,0))} | Won: ${won.length} / ${fmt(won.reduce((s,d)=>s+d._value,0))} | Lost: ${lost.length}
+Total: ${deals.length} deals | ${fmt(total)} | Win rate: ${wr} | Avg deal size (won): $${avgDealSize}
+Open: ${open.length} / ${fmt(open.reduce((s,d)=>s+d._value,0))} | Won: ${won.length} / ${fmt(wonRevenue)} | Lost: ${lost.length}
 ### By Stage
 ${Object.entries(byStage).sort((a,b)=>b[1].val-a[1].val).map(([s,v])=>`- ${s}: ${v.cnt} deals, ${fmt(v.val)}`).join('\n')}
 ### Top 5 Deals
 ${top5.map((d,i)=>`${i+1}. ${d._name} | ${d._company||'N/A'} | ${d._stage} | ${fmt(d._value)} | ${d._repName}`).join('\n')}
-### Reps (top 15)
-${Object.entries(byRep).sort((a,b)=>b[1].val-a[1].val).slice(0,15).map(([r,v])=>`- ${r}: ${v.cnt} deals, ${fmt(v.val)}, ${v.won} won`).join('\n')}
-### Regions
-${Object.entries(byRegion).sort((a,b)=>b[1].val-a[1].val).map(([r,v])=>`- ${r}: ${v.cnt} deals, ${fmt(v.val)}`).join('\n')}
+### Reps (top 15 by revenue) — format: name: total deals, revenue, won, lost, win_rate
+${Object.entries(byRep).sort((a,b)=>b[1].val-a[1].val).slice(0,15).map(([r,v])=>{const c=v.won+v.lost;const rwr=c?(v.won/c*100).toFixed(1)+'%':'N/A';return`- ${r}: ${v.cnt} deals, ${fmt(v.val)}, ${v.won} won, ${v.lost} lost, WR: ${rwr}`;}).join('\n')}
+### Regions — format: region: total deals, pipeline value, won, lost, win_rate
+${Object.entries(byRegion).sort((a,b)=>b[1].val-a[1].val).map(([r,v])=>{const c=v.won+v.lost;const rwr=c?(v.won/c*100).toFixed(1)+'%':'N/A';return`- ${r}: ${v.cnt} deals, ${fmt(v.val)}, ${v.won} won, ${v.lost} lost, WR: ${rwr}`;}).join('\n')}
 ### Products
 ${Object.entries(byProd).sort((a,b)=>b[1].val-a[1].val).map(([p,v])=>`- ${p}: ${v.cnt} deals, ${fmt(v.val)}`).join('\n')}
 ### Sample (first 25)
