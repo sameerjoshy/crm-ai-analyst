@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRO AI Analyst</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-primary:   #0f1117;
+      --bg-secondary: #1a1d27;
+      --bg-card:      #1e2130;
+      --bg-hover:     #252840;
+      --text-primary: #e8eaf6;
+      --text-sec:     #9196b0;
+      --accent:       #6366f1;
+      --accent-lt:    #818cf8;
+      --accent-glow:  rgba(99,102,241,.15);
+      --success:      #10b981;
+      --warning:      #f59e0b;
+      --danger:       #ef4444;
+      --border:       rgba(255,255,255,.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────────── */
+    .header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo {
+      font-size: 18px; font-weight: 700;
+      color: var(--accent-lt);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .logo span { color: var(--text-sec); font-weight: 400; font-size: 13px; }
+    .nav { display: flex; gap: 4px; }
+    .nav-btn {
+      padding: 8px 20px; border-radius: 8px;
+      border: none; cursor: pointer; font-size: 14px; font-weight: 500;
+      transition: all .2s; background: transparent; color: var(--text-sec);
+    }
+    .nav-btn.active { background: var(--accent-glow); color: var(--accent-lt); }
+    .nav-btn:hover:not(.active) { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* ── Main ───────────────────────────────────── */
+    .main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Upload ─────────────────────────────────── */
+    .upload-card {
+      background: var(--bg-card);
+      border: 1.5px dashed var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      text-align: center;
+    }
+    .upload-card h2 { font-size: 20px; margin-bottom: 8px; }
+    .upload-card p  { color: var(--text-sec); font-size: 13px; margin-bottom: 28px; }
+
+    .file-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px; margin-bottom: 28px;
+    }
+    .file-slot {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 12px;
+      cursor: pointer;
+      transition: all .2s;
+      position: relative;
+      user-select: none;
+    }
+    .file-slot:hover    { border-color: var(--accent); background: var(--accent-glow); }
+    .file-slot.loaded   { border-color: var(--success); background: rgba(16,185,129,.08); }
+    .file-slot input    { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .file-slot .fi-icon { font-size: 30px; margin-bottom: 8px; }
+    .file-slot .fi-label{ font-size: 13px; font-weight: 600; }
+    .file-slot .fi-status{ font-size: 11px; color: var(--text-sec); margin-top: 4px; }
+    .file-slot.loaded .fi-status { color: var(--success); }
+
+    .analyze-btn {
+      background: var(--accent); color: #fff;
+      border: none; padding: 12px 36px;
+      border-radius: 10px; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: all .2s;
+    }
+    .analyze-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .analyze-btn:not(:disabled):hover { background: var(--accent-lt); transform: translateY(-1px); }
+
+    /* ── Section header ─────────────────────────── */
+    .sec-header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .sec-header h1 { font-size: 22px; font-weight: 700; }
+    .reset-btn {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-sec); padding: 6px 14px;
+      border-radius: 8px; cursor: pointer; font-size: 12px; transition: all .2s;
+    }
+    .reset-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* ── KPI grid ───────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 14px; margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px;
+    }
+    .kpi-label { font-size: 11px; color: var(--text-sec); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
+    .kpi-value { font-size: 28px; font-weight: 700; }
+    .kpi-sub   { font-size: 11px; color: var(--text-sec); margin-top: 4px; }
+
+    /* ── Charts ─────────────────────────────────── */
+    .charts-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 16px; margin-bottom: 20px;
+    }
+    @media(max-width:900px){ .charts-grid { grid-template-columns: 1fr; } }
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px;
+    }
+    .card-title {
+      font-size: 11px; font-weight: 600; color: var(--text-sec);
+      text-transform: uppercase; letter-spacing: .6px; margin-bottom: 16px;
+    }
+
+    /* ── Tables ─────────────────────────────────── */
+    .tables-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 16px; margin-bottom: 16px;
+    }
+    @media(max-width:900px){ .tables-grid { grid-template-columns: 1fr; } }
+    .table-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; overflow-x: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left; padding: 10px 12px;
+      color: var(--text-sec); font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .5px;
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.03); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg-hover); }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .badge-won  { background: rgba(16,185,129,.15); color: #10b981; }
+    .badge-lost { background: rgba(239,68,68,.15);  color: #ef4444; }
+    .badge-open { background: rgba(99,102,241,.15); color: #818cf8; }
+
+    /* ── AI Tab ─────────────────────────────────── */
+    .ai-section {
+      display: flex; flex-direction: column;
+      height: calc(100vh - 108px); gap: 14px;
+    }
+    .api-bar {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 18px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .api-bar label { font-size: 13px; color: var(--text-sec); font-weight: 500; white-space: nowrap; }
+    .api-bar input {
+      flex: 1; min-width: 200px;
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 12px;
+      color: var(--text-primary); font-size: 13px; font-family: monospace;
+    }
+    .api-bar input:focus { outline: none; border-color: var(--accent); }
+    .btn-save {
+      background: var(--accent); color: #fff; border: none;
+      padding: 8px 18px; border-radius: 8px;
+      cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap;
+    }
+    .btn-save:hover { background: var(--accent-lt); }
+    #api-key-status { font-size: 12px; color: var(--text-sec); }
+
+    .warn-bar {
+      background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3);
+      border-radius: 10px; padding: 10px 16px; font-size: 13px; color: var(--warning);
+    }
+
+    .chat-wrap {
+      flex: 1; display: flex; flex-direction: column;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden; min-height: 0;
+    }
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 20px;
+      display: flex; flex-direction: column; gap: 18px;
+    }
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; gap: 10px;
+      color: var(--text-sec); text-align: center;
+    }
+    .empty-state .es-icon { font-size: 48px; }
+    .empty-state h3 { font-size: 16px; color: var(--text-primary); }
+    .empty-state p  { font-size: 13px; max-width: 420px; line-height: 1.6; }
+
+    .message { display: flex; gap: 12px; animation: fadeUp .3s ease; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .msg-avatar {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0;
+    }
+    .message.user      .msg-avatar { background: var(--accent-glow); border: 1px solid var(--accent); }
+    .message.assistant .msg-avatar { background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3); }
+    .msg-body { flex: 1; }
+    .msg-role { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-sec); margin-bottom: 4px; }
+    .msg-text { font-size: 14px; line-height: 1.7; color: var(--text-primary); word-break: break-word; }
+    .msg-text strong { color: var(--accent-lt); }
+
+    .thinking { display: flex; gap: 5px; align-items: center; padding: 6px 0; }
+    .thinking span {
+      width: 7px; height: 7px; background: var(--accent); border-radius: 50%;
+      animation: bounce 1.2s infinite;
+    }
+    .thinking span:nth-child(2) { animation-delay: .2s; }
+    .thinking span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce {
+      0%,80%,100% { transform: scale(.7); opacity: .5; }
+      40%          { transform: scale(1);  opacity: 1; }
+    }
+
+    .chat-input-area {
+      border-top: 1px solid var(--border);
+      padding: 14px 16px; display: flex; gap: 10px;
+    }
+    .chat-input {
+      flex: 1; background: var(--bg-secondary);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 14px; color: var(--text-primary);
+      font-size: 14px; font-family: inherit;
+      resize: none; min-height: 42px; max-height: 130px;
+    }
+    .chat-input:focus       { outline: none; border-color: var(--accent); }
+    .chat-input::placeholder{ color: var(--text-sec); }
+    .send-btn {
+      background: var(--accent); color: #fff; border: none;
+      padding: 10px 22px; border-radius: 10px;
+      cursor: pointer; font-size: 14px; font-weight: 600;
+      align-self: flex-end; transition: all .2s;
+    }
+    .send-btn:hover:not(:disabled) { background: var(--accent-lt); }
+    .send-btn:disabled { opacity: .45; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">📊 CRO AI Analyst <span>powered by Groq · llama-3.3-70b</span></div>
+  <nav class="nav">
+    <button class="nav-btn active" onclick="switchTab('dashboard', this)">Dashboard</button>
+    <button class="nav-btn"        onclick="switchTab('ai', this)">AI Analyst</button>
+  </nav>
+</header>
+
+<main class="main">
+
+  <!-- ═══ DASHBOARD TAB ═══════════════════════════════════════ -->
+  <div id="tab-dashboard" class="tab-content active">
+
+    <!-- Upload pane -->
+    <div id="upload-pane">
+      <div class="sec-header"><h1>Pipeline Dashboard</h1></div>
+      <div class="upload-card">
+        <h2>Upload your CRM data files</h2>
+        <p>All five CSV files are joined in-browser. Your data never leaves your device.</p>
+        <div class="file-grid">
+          <div class="file-slot" id="slot-accounts">
+            <input type="file" accept=".csv" onchange="loadFile('accounts',this)">
+            <div class="fi-icon">🏢</div>
+            <div class="fi-label">Accounts</div>
+            <div class="fi-status" id="st-accounts">Click to upload</div>
+          </div>
+          <div class="file-slot" id="slot-pipeline">
+            <input type="file" accept=".csv" onchange="loadFile('pipeline',this)">
+            <div class="fi-icon">💼</div>
+            <div class="fi-label">Sales Pipeline</div>
+            <div class="fi-status" id="st-pipeline">Click to upload</div>
+          </div>
+          <div class="file-slot" id="slot-products">
+            <input type="file" accept=".csv" onchange="loadFile('products',this)">
+            <div class="fi-icon">📦</div>
+            <div class="fi-label">Products</div>
+            <div class="fi-status" id="st-products">Click to upload</div>
+          </div>
+          <div class="file-slot" id="slot-teams">
+            <input type="file" accept=".csv" onchange="loadFile('teams',this)">
+            <div class="fi-icon">👥</div>
+            <div class="fi-label">Sales Teams</div>
+            <div class="fi-status" id="st-teams">Click to upload</div>
+          </div>
+          <div class="file-slot" id="slot-dictionary">
+            <input type="file" accept=".csv" onchange="loadFile('dictionary',this)">
+            <div class="fi-icon">📖</div>
+            <div class="fi-label">Data Dictionary</div>
+            <div class="fi-status" id="st-dictionary">Click to upload</div>
+          </div>
+        </div>
+        <button class="analyze-btn" id="analyze-btn" disabled onclick="buildDashboard()">
+          Generate Dashboard →
+        </button>
+      </div>
+    </div>
+
+    <!-- Dashboard pane (hidden until analysis) -->
+    <div id="dash-pane" style="display:none">
+      <div class="sec-header">
+        <h1>Pipeline Dashboard</h1>
+        <button class="reset-btn" onclick="resetAll()">↩ Upload new files</button>
+      </div>
+      <div class="kpi-grid"   id="kpi-grid"></div>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="card-title">Pipeline by Stage</div>
+          <canvas id="chart-stages" height="230"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="card-title">Rep Performance (Pipeline Value)</div>
+          <canvas id="chart-reps" height="230"></canvas>
+        </div>
+      </div>
+      <div class="tables-grid">
+        <div class="table-card">
+          <div class="card-title">Top 5 Deals by Value</div>
+          <table id="tbl-top"></table>
+        </div>
+        <div class="table-card">
+          <div class="card-title">Regional Breakdown</div>
+          <table id="tbl-regions"></table>
+        </div>
+      </div>
+      <div class="table-card" style="margin-top:16px">
+        <div class="card-title">Rep Performance Summary</div>
+        <table id="tbl-reps"></table>
+      </div>
+    </div>
+  </div><!-- /tab-dashboard -->
+
+  <!-- ═══ AI ANALYST TAB ══════════════════════════════════════ -->
+  <div id="tab-ai" class="tab-content">
+    <div class="ai-section">
+      <div class="api-bar">
+        <label>🔑 Groq API Key</label>
+        <input type="password" id="api-key-input" placeholder="gsk_…" />
+        <button class="btn-save" onclick="saveKey()">Save Key</button>
+        <span id="api-key-status"></span>
+      </div>
+      <div id="warn-bar" class="warn-bar" style="display:none">
+        ⚠️ No pipeline data loaded — upload CSVs on the Dashboard tab for data-driven answers.
+      </div>
+      <div class="chat-wrap">
+        <div class="chat-messages" id="chat-messages">
+          <div class="empty-state">
+            <div class="es-icon">🤖</div>
+            <h3>AI Pipeline Analyst</h3>
+            <p>Ask me anything about your sales pipeline. I can surface risks, identify top opportunities, evaluate rep performance, and suggest where to focus.</p>
+            <p style="margin-top:10px;font-size:12px;color:var(--text-sec)">
+              Try: "What's at risk this quarter?" &nbsp;·&nbsp; "Who are my top performers?" &nbsp;·&nbsp; "Which stage has the most value stuck?"
+            </p>
+          </div>
+        </div>
+        <div class="chat-input-area">
+          <textarea class="chat-input" id="chat-input" rows="1"
+            placeholder="Ask about your pipeline… (Enter to send, Shift+Enter for newline)"
+            onkeydown="handleKey(event)"></textarea>
+          <button class="send-btn" id="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /tab-ai -->
+
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════ */
+const raw   = { accounts: null, pipeline: null, products: null, teams: null, dictionary: null };
+let deals   = [];        // enriched deal rows
+let charts  = {};        // Chart.js instances
+let history = [];        // chat history
+
+/* ═══════════════════════════════════════════════════════════
+   CSV PARSING
+═══════════════════════════════════════════════════════════ */
+function parseRow(line) {
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (q && line[i+1] === '"') { cur += '"'; i++; } else q = !q;
+    } else if (ch === ',' && !q) { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur); return out;
+}
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return { headers: [], data: [] };
+  const headers = parseRow(lines[0]).map(h => h.trim());
+  const data = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const vals = parseRow(lines[i]);
+    const row = {};
+    headers.forEach((h, idx) => row[h] = (vals[idx] || '').trim());
+    data.push(row);
+  }
+  return { headers, data };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COLUMN DETECTION
+═══════════════════════════════════════════════════════════ */
+function findCol(headers, candidates) {
+  for (const c of candidates) {
+    const norm = s => s.toLowerCase().replace(/[\s_-]/g, '');
+    const hit = headers.find(h => norm(h) === norm(c));
+    if (hit) return hit;
+  }
+  for (const c of candidates) {
+    const hit = headers.find(h => h.toLowerCase().includes(c.toLowerCase()));
+    if (hit) return hit;
+  }
+  return null;
+}
+function gv(row, candidates) {
+  const col = findCol(Object.keys(row), candidates);
+  return col ? row[col] : '';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FILE LOADING
+═══════════════════════════════════════════════════════════ */
+function loadFile(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    raw[type] = parseCSV(e.target.result);
+    document.getElementById(`slot-${type}`).classList.add('loaded');
+    document.getElementById(`st-${type}`).textContent = `✓ ${file.name}`;
+    // Pipeline is required; others are optional but useful
+    document.getElementById('analyze-btn').disabled = !raw.pipeline;
+  };
+  reader.readAsText(file);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DATA JOIN
+═══════════════════════════════════════════════════════════ */
+function buildEnriched() {
+  if (!raw.pipeline) return [];
+
+  const acctMap = {}, repMap = {}, prodMap = {};
+  if (raw.accounts) raw.accounts.data.forEach(r => {
+    const id = gv(r, ['account_id','accountid','id','account']);
+    if (id) acctMap[id] = r;
+  });
+  if (raw.teams) raw.teams.data.forEach(r => {
+    const id = gv(r, ['rep_id','repid','user_id','userid','id','owner_id','ownerid']);
+    if (id) repMap[id] = r;
+  });
+  if (raw.products) raw.products.data.forEach(r => {
+    const id = gv(r, ['product_id','productid','id']);
+    if (id) prodMap[id] = r;
+  });
+
+  return raw.pipeline.data.map(d => {
+    const aid  = gv(d, ['account_id','accountid','account']);
+    const rid  = gv(d, ['rep_id','repid','owner_id','ownerid','user_id','assigned_to']);
+    const pid  = gv(d, ['product_id','productid','product']);
+    const acct = acctMap[aid] || {};
+    const rep  = repMap[rid]  || {};
+    const prod = prodMap[pid] || {};
+    const vRaw = gv(d, ['value','amount','deal_value','dealvalue','revenue','arr','mrr','contract_value','deal_amount']);
+    const val  = parseFloat((vRaw || '').replace(/[$,]/g, '')) || 0;
+
+    return {
+      ...d,
+      _name:  gv(d, ['deal_name','dealname','name','opportunity_name','title','deal']) || 'Untitled',
+      _stage: gv(d, ['stage','deal_stage','status','pipeline_stage']) || 'Unknown',
+      _value: val,
+      _prob:  parseFloat(gv(d, ['probability','prob','win_prob','close_prob'])) || null,
+      _close: gv(d, ['close_date','closedate','expected_close','closing_date','target_close']),
+      _repName: gv(rep, ['rep_name','name','full_name','first_name','firstname'])
+              || gv(d,   ['rep_name','owner_name','assigned_to','rep','owner'])
+              || rid || 'Unknown Rep',
+      _team:   gv(rep, ['team','team_name','group']),
+      _region: gv(rep,  ['region','territory','zone','geo'])
+             || gv(acct, ['region','territory','zone','geo'])
+             || gv(d,    ['region','territory']),
+      _company: gv(acct, ['company','company_name','account_name','name'])
+              || gv(d,   ['account_name','company','account']),
+      _product: gv(prod, ['product_name','name','product'])
+              || gv(d,   ['product','product_name']),
+      _industry: gv(acct, ['industry','vertical','sector']),
+    };
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════════════════ */
+function buildDashboard() {
+  deals = buildEnriched();
+  document.getElementById('upload-pane').style.display = 'none';
+  document.getElementById('dash-pane').style.display   = 'block';
+  renderKPIs(); renderCharts(); renderTables();
+}
+
+function resetAll() {
+  Object.keys(raw).forEach(k => raw[k] = null);
+  deals = []; history = [];
+  ['accounts','pipeline','products','teams','dictionary'].forEach(t => {
+    document.getElementById(`slot-${t}`).classList.remove('loaded');
+    document.getElementById(`st-${t}`).textContent = 'Click to upload';
+  });
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('upload-pane').style.display = 'block';
+  document.getElementById('dash-pane').style.display   = 'none';
+  Object.values(charts).forEach(c => c.destroy()); charts = {};
+}
+
+const fmt = n => n >= 1e6 ? '$'+(n/1e6).toFixed(2)+'M'
+                : n >= 1e3 ? '$'+(n/1e3).toFixed(0)+'K'
+                : '$'+n.toFixed(0);
+
+function renderKPIs() {
+  const total    = deals.reduce((s,d)=>s+d._value, 0);
+  const won      = deals.filter(d => /won|closed.won/i.test(d._stage));
+  const lost     = deals.filter(d => /lost|closed.lost/i.test(d._stage));
+  const open     = deals.filter(d => !/won|lost|closed/i.test(d._stage));
+  const closed   = won.length + lost.length;
+  const winRate  = closed ? (won.length/closed*100).toFixed(0)+'%' : 'N/A';
+  const avgOpen  = open.length ? open.reduce((s,d)=>s+d._value,0)/open.length : 0;
+  const stages   = new Set(deals.map(d=>d._stage)).size;
+
+  const kpis = [
+    { label:'Total Pipeline',  value: fmt(total),                    sub:`${deals.length} total deals` },
+    { label:'Open Pipeline',   value: fmt(open.reduce((s,d)=>s+d._value,0)), sub:`${open.length} open deals` },
+    { label:'Win Rate',        value: winRate,                       sub:`${won.length} won / ${closed} closed` },
+    { label:'Avg Deal Size',   value: fmt(avgOpen),                  sub:'open pipeline' },
+    { label:'Closed Won Rev.', value: fmt(won.reduce((s,d)=>s+d._value,0)), sub:`${won.length} deals won` },
+    { label:'Pipeline Stages', value: stages,                        sub:'distinct stages' },
+  ];
+  document.getElementById('kpi-grid').innerHTML = kpis.map(k =>
+    `<div class="kpi-card">
+       <div class="kpi-label">${k.label}</div>
+       <div class="kpi-value">${k.value}</div>
+       <div class="kpi-sub">${k.sub}</div>
+     </div>`
+  ).join('');
+}
+
+function renderCharts() {
+  Chart.defaults.color       = '#9196b0';
+  Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
+  const COLORS = ['#6366f1','#8b5cf6','#06b6d4','#10b981','#f59e0b','#ef4444','#ec4899','#14b8a6'];
+
+  // Stage chart
+  const sMap = {};
+  deals.forEach(d => {
+    if (!sMap[d._stage]) sMap[d._stage] = 0;
+    sMap[d._stage] += d._value;
+  });
+  const sSorted = Object.entries(sMap).sort((a,b) => b[1]-a[1]);
+  if (charts.stages) charts.stages.destroy();
+  charts.stages = new Chart(document.getElementById('chart-stages'), {
+    type: 'bar',
+    data: {
+      labels: sSorted.map(s=>s[0]),
+      datasets: [{ data: sSorted.map(s=>s[1]),
+        backgroundColor: COLORS.slice(0, sSorted.length),
+        borderRadius: 6, borderSkipped: false }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend:{display:false}, tooltip:{callbacks:{label:c=>fmt(c.raw)}} },
+      scales: { y:{ ticks:{callback:v=>fmt(v)} } }
+    }
+  });
+
+  // Rep chart (top 10)
+  const rMap = {};
+  deals.forEach(d => { rMap[d._repName] = (rMap[d._repName]||0) + d._value; });
+  const rSorted = Object.entries(rMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  if (charts.reps) charts.reps.destroy();
+  charts.reps = new Chart(document.getElementById('chart-reps'), {
+    type: 'bar',
+    data: {
+      labels: rSorted.map(r=>r[0]),
+      datasets: [{ data: rSorted.map(r=>r[1]),
+        backgroundColor: '#6366f1',
+        borderRadius: 6, borderSkipped: false }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true,
+      plugins: { legend:{display:false}, tooltip:{callbacks:{label:c=>fmt(c.raw)}} },
+      scales: { x:{ ticks:{callback:v=>fmt(v)} } }
+    }
+  });
+}
+
+function badgeCls(stage) {
+  if (/won|win/i.test(stage))  return 'badge-won';
+  if (/lost/i.test(stage))     return 'badge-lost';
+  return 'badge-open';
+}
+
+function renderTables() {
+  // Top 5
+  const top5 = [...deals].sort((a,b)=>b._value-a._value).slice(0,5);
+  document.getElementById('tbl-top').innerHTML =
+    `<thead><tr><th>Deal</th><th>Company</th><th>Stage</th><th>Value</th><th>Rep</th></tr></thead>
+     <tbody>${top5.map(d=>`
+       <tr>
+         <td>${d._name}</td>
+         <td>${d._company||'—'}</td>
+         <td><span class="badge ${badgeCls(d._stage)}">${d._stage}</span></td>
+         <td>${fmt(d._value)}</td>
+         <td>${d._repName}</td>
+       </tr>`).join('')}
+     </tbody>`;
+
+  // Regions
+  const rgMap = {};
+  deals.forEach(d => {
+    const r = d._region || 'Unknown';
+    if (!rgMap[r]) rgMap[r] = {val:0, cnt:0};
+    rgMap[r].val += d._value; rgMap[r].cnt++;
+  });
+  const rgs = Object.entries(rgMap).sort((a,b)=>b[1].val-a[1].val);
+  document.getElementById('tbl-regions').innerHTML =
+    `<thead><tr><th>Region</th><th>Deals</th><th>Pipeline Value</th></tr></thead>
+     <tbody>${rgs.map(([r,s])=>`<tr><td>${r}</td><td>${s.cnt}</td><td>${fmt(s.val)}</td></tr>`).join('')}</tbody>`;
+
+  // Rep summary
+  const rpMap = {};
+  deals.forEach(d => {
+    if (!rpMap[d._repName]) rpMap[d._repName] = {total:0, cnt:0, won:0, wonVal:0};
+    const p = rpMap[d._repName];
+    p.total += d._value; p.cnt++;
+    if (/won/i.test(d._stage)) { p.won++; p.wonVal += d._value; }
+  });
+  const rps = Object.entries(rpMap).sort((a,b)=>b[1].total-a[1].total);
+  document.getElementById('tbl-reps').innerHTML =
+    `<thead><tr><th>Rep</th><th>Deals</th><th>Total Pipeline</th><th>Closed Won</th><th>Won Revenue</th></tr></thead>
+     <tbody>${rps.map(([r,p])=>`
+       <tr>
+         <td>${r}</td><td>${p.cnt}</td>
+         <td>${fmt(p.total)}</td><td>${p.won}</td>
+         <td>${fmt(p.wonVal)}</td>
+       </tr>`).join('')}
+     </tbody>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB SWITCHING
+═══════════════════════════════════════════════════════════ */
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(el=>el.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  btn.classList.add('active');
+  if (tab === 'ai') document.getElementById('warn-bar').style.display = deals.length ? 'none' : 'block';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   API KEY
+═══════════════════════════════════════════════════════════ */
+function saveKey() {
+  const k = document.getElementById('api-key-input').value.trim();
+  if (!k) { alert('Please enter your Groq API key.'); return; }
+  sessionStorage.setItem('groq_api_key', k);
+  document.getElementById('api-key-input').value = '';
+  const st = document.getElementById('api-key-status');
+  st.textContent = '✓ Key saved for this session';
+  setTimeout(() => st.textContent = '', 3500);
+}
+window.addEventListener('load', () => {
+  if (sessionStorage.getItem('groq_api_key'))
+    document.getElementById('api-key-status').textContent = '✓ Key loaded from session';
+});
+
+/* ═══════════════════════════════════════════════════════════
+   AI DATA SUMMARY
+═══════════════════════════════════════════════════════════ */
+function dataSummary() {
+  if (!deals.length) return 'No pipeline data is loaded.';
+
+  const total = deals.reduce((s,d)=>s+d._value, 0);
+  const won   = deals.filter(d=>/won|closed.won/i.test(d._stage));
+  const lost  = deals.filter(d=>/lost|closed.lost/i.test(d._stage));
+  const open  = deals.filter(d=>!/won|lost|closed/i.test(d._stage));
+  const closed = won.length + lost.length;
+  const wr = closed ? (won.length/closed*100).toFixed(1)+'%' : 'N/A';
+
+  const byStage = {};
+  deals.forEach(d => {
+    if (!byStage[d._stage]) byStage[d._stage] = {cnt:0, val:0};
+    byStage[d._stage].cnt++; byStage[d._stage].val += d._value;
+  });
+
+  const byRep = {};
+  deals.forEach(d => {
+    if (!byRep[d._repName]) byRep[d._repName] = {cnt:0, val:0, won:0};
+    byRep[d._repName].cnt++; byRep[d._repName].val += d._value;
+    if (/won/i.test(d._stage)) byRep[d._repName].won++;
+  });
+
+  const byRegion = {};
+  deals.forEach(d => {
+    const r = d._region||'Unknown';
+    if (!byRegion[r]) byRegion[r] = {cnt:0, val:0};
+    byRegion[r].cnt++; byRegion[r].val += d._value;
+  });
+
+  const top5 = [...deals].sort((a,b)=>b._value-a._value).slice(0,5);
+  const sample = deals.slice(0,25);
+
+  return `## CRM Pipeline Data Summary
+
+Total deals: ${deals.length} | Pipeline: ${fmt(total)} | Win rate: ${wr}
+Open: ${open.length} deals / ${fmt(open.reduce((s,d)=>s+d._value,0))}
+Closed Won: ${won.length} / ${fmt(won.reduce((s,d)=>s+d._value,0))}  |  Closed Lost: ${lost.length}
+
+### By Stage
+${Object.entries(byStage).sort((a,b)=>b[1].val-a[1].val)
+  .map(([s,v])=>`- ${s}: ${v.cnt} deals, ${fmt(v.val)}`).join('\n')}
+
+### Top 5 Deals
+${top5.map((d,i)=>`${i+1}. ${d._name} | ${d._company||'N/A'} | ${d._stage} | ${fmt(d._value)} | ${d._repName}`).join('\n')}
+
+### Rep Performance (top 15)
+${Object.entries(byRep).sort((a,b)=>b[1].val-a[1].val).slice(0,15)
+  .map(([r,v])=>`- ${r}: ${v.cnt} deals, ${fmt(v.val)}, ${v.won} won`).join('\n')}
+
+### Regional Breakdown
+${Object.entries(byRegion).sort((a,b)=>b[1].val-a[1].val)
+  .map(([r,v])=>`- ${r}: ${v.cnt} deals, ${fmt(v.val)}`).join('\n')}
+
+### Deal Sample (first 25)
+${sample.map(d=>`${d._name} | ${d._company||''} | ${d._stage} | ${fmt(d._value)} | ${d._repName} | ${d._region||''} | ${d._product||''}`).join('\n')}`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHAT
+═══════════════════════════════════════════════════════════ */
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function esc(t) {
+  return t
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\n/g,'<br>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/`(.+?)`/g,'<code style="background:rgba(255,255,255,.08);padding:1px 5px;border-radius:3px">$1</code>');
+}
+
+function addMsg(role, html, raw) {
+  const box = document.getElementById('chat-messages');
+  const empty = box.querySelector('.empty-state');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+  div.innerHTML = `
+    <div class="msg-avatar">${role==='user'?'👤':'🤖'}</div>
+    <div class="msg-body">
+      <div class="msg-role">${role==='user'?'You':'AI Analyst'}</div>
+      <div class="msg-text">${html||esc(raw||'')}</div>
+    </div>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+function addThinking() {
+  const box = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.id = 'thinking'; div.className = 'message assistant';
+  div.innerHTML = `
+    <div class="msg-avatar">🤖</div>
+    <div class="msg-body">
+      <div class="msg-role">AI Analyst</div>
+      <div class="thinking"><span></span><span></span><span></span></div>
+    </div>`;
+  box.appendChild(div); box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+async function sendMessage() {
+  const input  = document.getElementById('chat-input');
+  const q      = input.value.trim();
+  if (!q) return;
+  const apiKey = sessionStorage.getItem('groq_api_key');
+  if (!apiKey) { alert('Please save your Groq API key first.'); return; }
+
+  input.value = ''; input.style.height = 'auto';
+  document.getElementById('send-btn').disabled = true;
+
+  addMsg('user', null, q);
+  history.push({ role:'user', content: q });
+
+  const thinking = addThinking();
+
+  const system = `You are an expert CRO (Chief Revenue Officer) AI Analyst with deep SaaS sales expertise. You have been given the following structured CRM data:
+
+${dataSummary()}
+
+Provide specific, data-driven insights. Reference deal names, rep names, and dollar amounts from the data. Be concise but actionable. Use bullet points where helpful. Flag risks clearly.`;
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role:'system', content: system },
+          ...history.slice(-10),
+        ],
+        temperature: 0.3,
+        max_tokens: 1200,
+      }),
+    });
+
+    const data = await res.json();
+    thinking.remove();
+
+    if (!res.ok) {
+      const err = data.error?.message || `HTTP ${res.status}`;
+      addMsg('assistant', null, `Error from Groq: ${err}`);
+      history.pop(); return;
+    }
+
+    const answer = data.choices[0].message.content;
+    history.push({ role:'assistant', content: answer });
+    addMsg('assistant', esc(answer));
+  } catch(e) {
+    thinking.remove();
+    addMsg('assistant', null, `Network error: ${e.message}`);
+    history.pop();
+  } finally {
+    document.getElementById('send-btn').disabled = false;
+    input.focus();
+  }
+}
+</script>
+</body>
+</html>
